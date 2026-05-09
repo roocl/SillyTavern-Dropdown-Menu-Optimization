@@ -40,6 +40,9 @@ function resolveDropdownSorterHostGlobal(runtimeGlobal) {
     let observer = null;
     let refreshTimer = null;
     let isApplying = false;
+    let jqueryEventsBound = false;
+    let lastRecordSignature = '';
+    let lastRecordTime = 0;
 
     function cloneDefaultState() {
         return JSON.parse(JSON.stringify(defaultState));
@@ -108,6 +111,36 @@ function resolveDropdownSorterHostGlobal(runtimeGlobal) {
     function getUsageKey(optionLike) {
         return getLabel(optionLike);
     }
+
+    function getSelectionLabels(select, event) {
+        const select2Data = event?.params?.data;
+        const select2Text = getLabel(select2Data || {});
+        if (select2Text) return [select2Text];
+
+        return Array.from(select?.selectedOptions || [])
+            .map(option => getLabel(option))
+            .filter(Boolean);
+    }
+
+    function createSelect2ChangeGate() {
+        const select2Times = new WeakMap();
+        return {
+            shouldSkip(select, eventType, now = Date.now()) {
+                if (!select || !eventType) return false;
+                if (String(eventType).startsWith('select2:')) {
+                    select2Times.set(select, now);
+                    return false;
+                }
+                if (eventType === 'change') {
+                    const lastSelect2Time = select2Times.get(select) || 0;
+                    return now - lastSelect2Time < 250;
+                }
+                return false;
+            },
+        };
+    }
+
+    const select2ChangeGate = createSelect2ChangeGate();
 
     function createUsageStore(initialUsage = state.usage) {
         const usage = initialUsage;
@@ -200,15 +233,21 @@ function resolveDropdownSorterHostGlobal(runtimeGlobal) {
         }
     }
 
-    function recordSelection(select) {
+    function recordSelection(select, event) {
         const scope = getSelectScope(select);
         if (!scope) return;
 
-        const selectedOptions = Array.from(select.selectedOptions || []).filter(option => getLabel(option));
-        if (selectedOptions.length === 0) return;
+        const selectedLabels = getSelectionLabels(select, event);
+        if (selectedLabels.length === 0) return;
 
-        for (const option of selectedOptions) {
-            usageStore.record(scope, getUsageKey(option));
+        const signature = `${scope}:${selectedLabels.join('\u0001')}`;
+        const now = Date.now();
+        if (signature === lastRecordSignature && now - lastRecordTime < 250) return;
+        lastRecordSignature = signature;
+        lastRecordTime = now;
+
+        for (const label of selectedLabels) {
+            usageStore.record(scope, label);
         }
 
         saveState();
@@ -342,6 +381,7 @@ function resolveDropdownSorterHostGlobal(runtimeGlobal) {
         refreshTimer = global.setTimeout(() => {
             isApplying = true;
             try {
+                bindJQueryEvents();
                 injectStyle();
                 registerSettingsPanel();
                 for (const select of findManagedSelects()) {
@@ -363,11 +403,27 @@ function resolveDropdownSorterHostGlobal(runtimeGlobal) {
         document[`${MODULE_NAME}Bound`] = true;
 
         document.addEventListener('change', event => {
+            if (jqueryEventsBound) return;
             const target = event.target;
             if (target?.tagName === 'SELECT' && getSelectScope(target)) {
-                recordSelection(target);
+                recordSelection(target, event);
             }
         }, true);
+    }
+
+    function bindJQueryEvents() {
+        const $ = global.jQuery || global.$;
+        if (jqueryEventsBound || typeof $ !== 'function') return;
+
+        jqueryEventsBound = true;
+        $(getDocument()).on(
+            'change.stdfs select2:select.stdfs',
+            'select[data-preset-manager-for], #world_info, #world_editor_select',
+            function onDropdownChanged(event) {
+                if (select2ChangeGate.shouldSkip(this, event.type)) return;
+                recordSelection(this, event);
+            },
+        );
     }
 
     function startObserver() {
@@ -384,6 +440,7 @@ function resolveDropdownSorterHostGlobal(runtimeGlobal) {
     }
 
     function start() {
+        bindJQueryEvents();
         bindEvents();
         refresh();
         startObserver();
@@ -410,6 +467,8 @@ function resolveDropdownSorterHostGlobal(runtimeGlobal) {
             createUsageStore: () => createUsageStore({ preset: {}, world: {} }),
             resolveHostGlobal: resolveDropdownSorterHostGlobal,
             createSettingsPanelHtml,
+            getSelectionLabels,
+            createSelect2ChangeGate,
         },
     };
 

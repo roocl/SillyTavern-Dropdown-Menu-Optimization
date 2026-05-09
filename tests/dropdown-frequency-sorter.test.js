@@ -64,4 +64,28 @@ assert.match(settingsHtml, /id="stdfs-preset-mode"/);
 assert.match(settingsHtml, /id="stdfs-world-mode"/);
 assert.doesNotMatch(settingsHtml, /stdfs-control/);
 
+assert.deepEqual(
+    sorter.__test.getSelectionLabels(
+        { selectedOptions: [{ text: 'Alpha' }, { textContent: 'Beta' }] },
+        { params: { data: { text: 'Gamma' } } },
+    ),
+    ['Gamma'],
+    'select2 events record only the world selected by the current interaction',
+);
+
+assert.deepEqual(
+    sorter.__test.getSelectionLabels(
+        { selectedOptions: [{ text: 'Alpha' }, { textContent: 'Beta' }] },
+        {},
+    ),
+    ['Alpha', 'Beta'],
+    'native changes fall back to selected options',
+);
+
+const gate = sorter.__test.createSelect2ChangeGate();
+const selectElement = {};
+assert.equal(gate.shouldSkip(selectElement, 'select2:select', 1000), false);
+assert.equal(gate.shouldSkip(selectElement, 'change', 1100), true);
+assert.equal(gate.shouldSkip(selectElement, 'change', 1400), false);
+
 console.log('dropdown-frequency-sorter tests passed');
