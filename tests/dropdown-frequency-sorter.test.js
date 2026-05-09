@@ -56,4 +56,12 @@ assert.equal(
     'script resolves JS-Slash-Runner iframe execution to the SillyTavern parent window',
 );
 
+const settingsHtml = sorter.__test.createSettingsPanelHtml('default', 'frequency');
+assert.match(settingsHtml, /inline-drawer/);
+assert.match(settingsHtml, /inline-drawer-toggle inline-drawer-header/);
+assert.match(settingsHtml, /inline-drawer-content/);
+assert.match(settingsHtml, /id="stdfs-preset-mode"/);
+assert.match(settingsHtml, /id="stdfs-world-mode"/);
+assert.doesNotMatch(settingsHtml, /stdfs-control/);
+
 console.log('dropdown-frequency-sorter tests passed');

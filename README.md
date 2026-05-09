@@ -7,10 +7,18 @@
 - 优化预设下拉菜单：可选择默认顺序或按使用频率从高到低排序。
 - 优化世界书下拉菜单：可选择默认顺序或按使用频率从高到低排序。
 - 自动记录用户选择次数，并保存在浏览器 `localStorage` 中。
-- 每类菜单旁边会出现一个小控件：
-  - `默认`：保持 SillyTavern 原本顺序。
-  - `常用`：按使用频率排序，同频时保持原本顺序。
-  - `0`：清空该类菜单的使用频率统计。
+- 设置入口挂在 SillyTavern 扩展设置容器 `#extensions_settings` 下，使用原生 `inline-drawer` 抽屉样式。
+
+## 设置入口
+
+导入并启用脚本后，在扩展设置栏中找到 **下拉菜单排序优化**：
+
+- `预设下拉菜单`：可切换 `默认` / `常用`。
+- `世界书下拉菜单`：可切换 `默认` / `常用`。
+- `清空预设统计`：清空预设下拉菜单的使用频率。
+- `清空世界书统计`：清空世界书下拉菜单的使用频率。
+
+脚本不会再把切换控件插到业务下拉框旁边，避免挤占原有菜单空间。
 
 ## 导入方式
 
@@ -36,6 +44,7 @@ STDropdownFrequencySorter.refresh();
 ## 验证
 
 ```bash
+node --check st-dropdown-frequency-sorter.user.js
 node tests/dropdown-frequency-sorter.test.js
 node tests/js-slash-runner-export.test.js
 ```

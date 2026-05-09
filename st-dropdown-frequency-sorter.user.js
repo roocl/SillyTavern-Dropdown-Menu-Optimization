@@ -21,7 +21,7 @@ function resolveDropdownSorterHostGlobal(runtimeGlobal) {
     const MODULE_NAME = 'STDropdownFrequencySorter';
     const STORAGE_KEY = 'st-dropdown-frequency-sorter:v1';
     const STYLE_ID = 'stdfs-style';
-    const CONTROL_CLASS = 'stdfs-control';
+    const SETTINGS_PANEL_ID = 'stdfs-settings';
     const MANAGED_ATTR = 'data-stdfs-managed';
     const MODES = new Set(['default', 'frequency']);
 
@@ -222,71 +222,113 @@ function resolveDropdownSorterHostGlobal(runtimeGlobal) {
         const style = document.createElement('style');
         style.id = STYLE_ID;
         style.textContent = `
-            .${CONTROL_CLASS} {
-                display: inline-flex;
+            #${SETTINGS_PANEL_ID} .stdfs-settings__row {
+                display: flex;
                 align-items: center;
-                gap: 4px;
-                margin-inline-start: 4px;
-                vertical-align: middle;
-                font-size: 0.85em;
+                justify-content: space-between;
+                gap: 12px;
+                margin: 8px 0;
             }
-            .${CONTROL_CLASS} select {
-                width: auto;
-                min-width: 5.5em;
+            #${SETTINGS_PANEL_ID} .stdfs-settings__row label {
+                flex: 1 1 auto;
+            }
+            #${SETTINGS_PANEL_ID} .stdfs-settings__row select {
+                flex: 0 0 8em;
                 max-width: 8em;
-                padding-inline: 4px;
             }
-            .${CONTROL_CLASS} button {
-                min-width: 1.8em;
-                padding-inline: 4px;
+            #${SETTINGS_PANEL_ID} .stdfs-settings__actions {
+                display: flex;
+                gap: 8px;
+                flex-wrap: wrap;
+                margin-top: 10px;
             }
         `;
         document.head.appendChild(style);
     }
 
-    function makeControl(select, scope) {
-        const document = getDocument();
-        if (!document || select.nextElementSibling?.classList?.contains(CONTROL_CLASS)) return;
+    function createSettingsPanelHtml(presetMode, worldMode) {
+        const presetDefaultSelected = presetMode === 'default' ? ' selected' : '';
+        const presetFrequencySelected = presetMode === 'frequency' ? ' selected' : '';
+        const worldDefaultSelected = worldMode === 'default' ? ' selected' : '';
+        const worldFrequencySelected = worldMode === 'frequency' ? ' selected' : '';
 
-        const wrapper = document.createElement('span');
-        wrapper.className = CONTROL_CLASS;
-        wrapper.dataset.stdfsScope = scope;
-
-        const modeSelect = document.createElement('select');
-        modeSelect.title = '下拉菜单排序方式';
-        modeSelect.innerHTML = `
-            <option value="default">默认</option>
-            <option value="frequency">常用</option>
+        return `
+            <div class="inline-drawer">
+                <div class="inline-drawer-toggle inline-drawer-header">
+                    <b>下拉菜单排序优化</b>
+                    <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
+                </div>
+                <div class="inline-drawer-content">
+                    <div class="stdfs-settings__row">
+                        <label for="stdfs-preset-mode">预设下拉菜单</label>
+                        <select id="stdfs-preset-mode">
+                            <option value="default"${presetDefaultSelected}>默认</option>
+                            <option value="frequency"${presetFrequencySelected}>常用</option>
+                        </select>
+                    </div>
+                    <div class="stdfs-settings__row">
+                        <label for="stdfs-world-mode">世界书下拉菜单</label>
+                        <select id="stdfs-world-mode">
+                            <option value="default"${worldDefaultSelected}>默认</option>
+                            <option value="frequency"${worldFrequencySelected}>常用</option>
+                        </select>
+                    </div>
+                    <div class="stdfs-settings__actions">
+                        <button id="stdfs-clear-preset" type="button" class="menu_button">清空预设统计</button>
+                        <button id="stdfs-clear-world" type="button" class="menu_button">清空世界书统计</button>
+                    </div>
+                    <small>常用排序会按选择次数从高到低排列；同频时保持默认顺序。</small>
+                </div>
+            </div>
         `;
-        modeSelect.value = getScopeMode(scope);
-        modeSelect.addEventListener('change', () => {
-            setScopeMode(scope, modeSelect.value);
-            syncControls();
-        });
-
-        const clearButton = document.createElement('button');
-        clearButton.type = 'button';
-        clearButton.textContent = '0';
-        clearButton.title = '清空此类菜单的使用频率统计';
-        clearButton.addEventListener('click', () => {
-            usageStore.clear(scope);
-            saveState();
-            refresh();
-        });
-
-        wrapper.append(modeSelect, clearButton);
-        select.insertAdjacentElement('afterend', wrapper);
     }
 
-    function syncControls() {
+    function syncSettingsPanel() {
         const document = getDocument();
         if (!document) return;
 
-        document.querySelectorAll(`.${CONTROL_CLASS}`).forEach(control => {
-            const scope = control.dataset.stdfsScope;
-            const select = control.querySelector('select');
-            if (select && scope) select.value = getScopeMode(scope);
+        const presetMode = document.getElementById('stdfs-preset-mode');
+        const worldMode = document.getElementById('stdfs-world-mode');
+        if (presetMode) presetMode.value = state.settings.presetMode;
+        if (worldMode) worldMode.value = state.settings.worldMode;
+    }
+
+    function clearUsage(scope) {
+        if (scope && !['preset', 'world'].includes(scope)) return false;
+        usageStore.clear(scope);
+        saveState();
+        refresh();
+        return true;
+    }
+
+    function registerSettingsPanel() {
+        const document = getDocument();
+        if (!document || document.getElementById(SETTINGS_PANEL_ID)) return;
+
+        const host = document.querySelector('#extensions_settings');
+        if (!host) return;
+
+        const panel = document.createElement('div');
+        panel.id = SETTINGS_PANEL_ID;
+        panel.innerHTML = createSettingsPanelHtml(state.settings.presetMode, state.settings.worldMode);
+
+        const presetMode = panel.querySelector('#stdfs-preset-mode');
+        const worldMode = panel.querySelector('#stdfs-world-mode');
+        const clearPreset = panel.querySelector('#stdfs-clear-preset');
+        const clearWorld = panel.querySelector('#stdfs-clear-world');
+
+        presetMode?.addEventListener('change', () => {
+            setScopeMode('preset', presetMode.value);
+            syncSettingsPanel();
         });
+        worldMode?.addEventListener('change', () => {
+            setScopeMode('world', worldMode.value);
+            syncSettingsPanel();
+        });
+        clearPreset?.addEventListener('click', () => clearUsage('preset'));
+        clearWorld?.addEventListener('click', () => clearUsage('world'));
+
+        host.append(panel);
     }
 
     function findManagedSelects() {
@@ -301,14 +343,14 @@ function resolveDropdownSorterHostGlobal(runtimeGlobal) {
             isApplying = true;
             try {
                 injectStyle();
+                registerSettingsPanel();
                 for (const select of findManagedSelects()) {
                     const scope = getSelectScope(select);
                     if (!scope) continue;
                     select.setAttribute(MANAGED_ATTR, 'true');
-                    makeControl(select, scope);
                     applySortToSelect(select);
                 }
-                syncControls();
+                syncSettingsPanel();
             } finally {
                 isApplying = false;
             }
@@ -352,16 +394,8 @@ function resolveDropdownSorterHostGlobal(runtimeGlobal) {
         observer = null;
         const document = getDocument();
         if (!document) return;
-        document.querySelectorAll(`.${CONTROL_CLASS}`).forEach(element => element.remove());
+        document.getElementById(SETTINGS_PANEL_ID)?.remove();
         document.querySelectorAll(`[${MANAGED_ATTR}]`).forEach(element => element.removeAttribute(MANAGED_ATTR));
-    }
-
-    function clearUsage(scope) {
-        if (scope && !['preset', 'world'].includes(scope)) return false;
-        usageStore.clear(scope);
-        saveState();
-        refresh();
-        return true;
     }
 
     const api = {
@@ -375,6 +409,7 @@ function resolveDropdownSorterHostGlobal(runtimeGlobal) {
             sortOptions,
             createUsageStore: () => createUsageStore({ preset: {}, world: {} }),
             resolveHostGlobal: resolveDropdownSorterHostGlobal,
+            createSettingsPanelHtml,
         },
     };
 
