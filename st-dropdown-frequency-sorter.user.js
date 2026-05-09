@@ -276,21 +276,22 @@ function resolveDropdownSorterHostGlobal(runtimeGlobal) {
                 max-width: 8em;
             }
             #${SETTINGS_PANEL_ID} .stdfs-settings__actions {
-                display: flex;
+                display: grid;
+                grid-template-columns: repeat(4, minmax(0, 1fr));
                 gap: 8px;
-                flex-wrap: wrap;
                 margin-top: 10px;
             }
-            #${SETTINGS_PANEL_ID} .stdfs-settings__square-button {
-                width: 32px;
-                min-width: 32px;
+            #${SETTINGS_PANEL_ID} .stdfs-settings__action-button {
+                width: 100%;
+                min-width: 0;
                 height: 32px;
-                padding: 0;
+                padding: 0 6px;
                 display: inline-flex;
                 align-items: center;
                 justify-content: center;
                 line-height: 1;
-                font-weight: 700;
+                white-space: nowrap;
+                font-size: 0.9em;
             }
         `;
         document.head.appendChild(style);
@@ -306,6 +307,10 @@ function resolveDropdownSorterHostGlobal(runtimeGlobal) {
         clearWorld: '\u6e05\u7a7a\u4e16\u754c\u4e66\u7edf\u8ba1',
         showPresetStats: '\u67e5\u770b\u9884\u8bbe\u7edf\u8ba1',
         showWorldStats: '\u67e5\u770b\u4e16\u754c\u4e66\u7edf\u8ba1',
+        clearPresetShort: '\u6e05\u9884\u8bbe',
+        clearWorldShort: '\u6e05\u4e16\u754c',
+        showPresetStatsShort: '\u770b\u9884\u8bbe',
+        showWorldStatsShort: '\u770b\u4e16\u754c',
         hint: '\u5e38\u7528\u6392\u5e8f\u4f1a\u6309\u9009\u62e9\u6b21\u6570\u4ece\u9ad8\u5230\u4f4e\u6392\u5217\uff1b\u540c\u9891\u65f6\u4fdd\u6301\u9ed8\u8ba4\u987a\u5e8f\u3002',
         presetStatsTitle: '\u9884\u8bbe\u70b9\u51fb\u6b21\u6570\u7edf\u8ba1',
         worldStatsTitle: '\u4e16\u754c\u4e66\u70b9\u51fb\u6b21\u6570\u7edf\u8ba1',
@@ -340,10 +345,10 @@ function resolveDropdownSorterHostGlobal(runtimeGlobal) {
                         </select>
                     </div>
                     <div class="stdfs-settings__actions">
-                        <button id="stdfs-clear-preset" type="button" class="menu_button stdfs-settings__square-button" title="${uiText.clearPreset}">0</button>
-                        <button id="stdfs-clear-world" type="button" class="menu_button stdfs-settings__square-button" title="${uiText.clearWorld}">0</button>
-                        <button id="stdfs-show-preset-stats" type="button" class="menu_button stdfs-settings__square-button" title="${uiText.showPresetStats}">#</button>
-                        <button id="stdfs-show-world-stats" type="button" class="menu_button stdfs-settings__square-button" title="${uiText.showWorldStats}">#</button>
+                        <button id="stdfs-clear-preset" type="button" class="menu_button stdfs-settings__action-button" title="${uiText.clearPreset}">${uiText.clearPresetShort}</button>
+                        <button id="stdfs-clear-world" type="button" class="menu_button stdfs-settings__action-button" title="${uiText.clearWorld}">${uiText.clearWorldShort}</button>
+                        <button id="stdfs-show-preset-stats" type="button" class="menu_button stdfs-settings__action-button" title="${uiText.showPresetStats}">${uiText.showPresetStatsShort}</button>
+                        <button id="stdfs-show-world-stats" type="button" class="menu_button stdfs-settings__action-button" title="${uiText.showWorldStats}">${uiText.showWorldStatsShort}</button>
                     </div>
                     <small>${uiText.hint}</small>
                 </div>

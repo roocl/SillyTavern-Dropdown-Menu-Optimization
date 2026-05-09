@@ -66,7 +66,11 @@ assert.match(settingsHtml, /id="stdfs-clear-preset"/);
 assert.match(settingsHtml, /id="stdfs-clear-world"/);
 assert.match(settingsHtml, /id="stdfs-show-preset-stats"/);
 assert.match(settingsHtml, /id="stdfs-show-world-stats"/);
-assert.match(settingsHtml, /stdfs-settings__square-button/);
+assert.match(settingsHtml, /stdfs-settings__action-button/);
+assert.match(settingsHtml, />清预设<\/button>/);
+assert.match(settingsHtml, />清世界<\/button>/);
+assert.match(settingsHtml, />看预设<\/button>/);
+assert.match(settingsHtml, />看世界<\/button>/);
 assert.doesNotMatch(settingsHtml, /stdfs-control/);
 
 assert.deepEqual(
