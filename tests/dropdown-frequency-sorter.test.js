@@ -62,6 +62,11 @@ assert.match(settingsHtml, /inline-drawer-toggle inline-drawer-header/);
 assert.match(settingsHtml, /inline-drawer-content/);
 assert.match(settingsHtml, /id="stdfs-preset-mode"/);
 assert.match(settingsHtml, /id="stdfs-world-mode"/);
+assert.match(settingsHtml, /id="stdfs-clear-preset"/);
+assert.match(settingsHtml, /id="stdfs-clear-world"/);
+assert.match(settingsHtml, /id="stdfs-show-preset-stats"/);
+assert.match(settingsHtml, /id="stdfs-show-world-stats"/);
+assert.match(settingsHtml, /stdfs-settings__square-button/);
 assert.doesNotMatch(settingsHtml, /stdfs-control/);
 
 assert.deepEqual(
@@ -87,5 +92,15 @@ const selectElement = {};
 assert.equal(gate.shouldSkip(selectElement, 'select2:select', 1000), false);
 assert.equal(gate.shouldSkip(selectElement, 'change', 1100), true);
 assert.equal(gate.shouldSkip(selectElement, 'change', 1400), false);
+
+assert.equal(
+    sorter.__test.formatUsageStats('preset', { Beta: 2, Alpha: 5 }),
+    '预设点击次数统计\n\n1. Alpha: 5\n2. Beta: 2',
+);
+
+assert.equal(
+    sorter.__test.formatUsageStats('world', {}),
+    '世界书点击次数统计\n\n暂无统计。',
+);
 
 console.log('dropdown-frequency-sorter tests passed');

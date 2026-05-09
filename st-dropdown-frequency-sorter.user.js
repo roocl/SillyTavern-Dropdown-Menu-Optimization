@@ -281,9 +281,36 @@ function resolveDropdownSorterHostGlobal(runtimeGlobal) {
                 flex-wrap: wrap;
                 margin-top: 10px;
             }
+            #${SETTINGS_PANEL_ID} .stdfs-settings__square-button {
+                width: 32px;
+                min-width: 32px;
+                height: 32px;
+                padding: 0;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                line-height: 1;
+                font-weight: 700;
+            }
         `;
         document.head.appendChild(style);
     }
+
+    const uiText = {
+        title: '\u4e0b\u62c9\u83dc\u5355\u6392\u5e8f\u4f18\u5316',
+        presetLabel: '\u9884\u8bbe\u4e0b\u62c9\u83dc\u5355',
+        worldLabel: '\u4e16\u754c\u4e66\u4e0b\u62c9\u83dc\u5355',
+        defaultMode: '\u9ed8\u8ba4',
+        frequencyMode: '\u5e38\u7528',
+        clearPreset: '\u6e05\u7a7a\u9884\u8bbe\u7edf\u8ba1',
+        clearWorld: '\u6e05\u7a7a\u4e16\u754c\u4e66\u7edf\u8ba1',
+        showPresetStats: '\u67e5\u770b\u9884\u8bbe\u7edf\u8ba1',
+        showWorldStats: '\u67e5\u770b\u4e16\u754c\u4e66\u7edf\u8ba1',
+        hint: '\u5e38\u7528\u6392\u5e8f\u4f1a\u6309\u9009\u62e9\u6b21\u6570\u4ece\u9ad8\u5230\u4f4e\u6392\u5217\uff1b\u540c\u9891\u65f6\u4fdd\u6301\u9ed8\u8ba4\u987a\u5e8f\u3002',
+        presetStatsTitle: '\u9884\u8bbe\u70b9\u51fb\u6b21\u6570\u7edf\u8ba1',
+        worldStatsTitle: '\u4e16\u754c\u4e66\u70b9\u51fb\u6b21\u6570\u7edf\u8ba1',
+        emptyStats: '\u6682\u65e0\u7edf\u8ba1\u3002',
+    };
 
     function createSettingsPanelHtml(presetMode, worldMode) {
         const presetDefaultSelected = presetMode === 'default' ? ' selected' : '';
@@ -294,32 +321,57 @@ function resolveDropdownSorterHostGlobal(runtimeGlobal) {
         return `
             <div class="inline-drawer">
                 <div class="inline-drawer-toggle inline-drawer-header">
-                    <b>下拉菜单排序优化</b>
+                    <b>${uiText.title}</b>
                     <div class="inline-drawer-icon fa-solid fa-circle-chevron-down down"></div>
                 </div>
                 <div class="inline-drawer-content">
                     <div class="stdfs-settings__row">
-                        <label for="stdfs-preset-mode">预设下拉菜单</label>
+                        <label for="stdfs-preset-mode">${uiText.presetLabel}</label>
                         <select id="stdfs-preset-mode">
-                            <option value="default"${presetDefaultSelected}>默认</option>
-                            <option value="frequency"${presetFrequencySelected}>常用</option>
+                            <option value="default"${presetDefaultSelected}>${uiText.defaultMode}</option>
+                            <option value="frequency"${presetFrequencySelected}>${uiText.frequencyMode}</option>
                         </select>
                     </div>
                     <div class="stdfs-settings__row">
-                        <label for="stdfs-world-mode">世界书下拉菜单</label>
+                        <label for="stdfs-world-mode">${uiText.worldLabel}</label>
                         <select id="stdfs-world-mode">
-                            <option value="default"${worldDefaultSelected}>默认</option>
-                            <option value="frequency"${worldFrequencySelected}>常用</option>
+                            <option value="default"${worldDefaultSelected}>${uiText.defaultMode}</option>
+                            <option value="frequency"${worldFrequencySelected}>${uiText.frequencyMode}</option>
                         </select>
                     </div>
                     <div class="stdfs-settings__actions">
-                        <button id="stdfs-clear-preset" type="button" class="menu_button">清空预设统计</button>
-                        <button id="stdfs-clear-world" type="button" class="menu_button">清空世界书统计</button>
+                        <button id="stdfs-clear-preset" type="button" class="menu_button stdfs-settings__square-button" title="${uiText.clearPreset}">0</button>
+                        <button id="stdfs-clear-world" type="button" class="menu_button stdfs-settings__square-button" title="${uiText.clearWorld}">0</button>
+                        <button id="stdfs-show-preset-stats" type="button" class="menu_button stdfs-settings__square-button" title="${uiText.showPresetStats}">#</button>
+                        <button id="stdfs-show-world-stats" type="button" class="menu_button stdfs-settings__square-button" title="${uiText.showWorldStats}">#</button>
                     </div>
-                    <small>常用排序会按选择次数从高到低排列；同频时保持默认顺序。</small>
+                    <small>${uiText.hint}</small>
                 </div>
             </div>
         `;
+    }
+
+    function formatUsageStats(scope, usageCounts = state.usage[scope] || {}) {
+        const title = scope === 'preset' ? uiText.presetStatsTitle : uiText.worldStatsTitle;
+        const rows = Object.entries(usageCounts)
+            .filter(([, count]) => Number(count) > 0)
+            .sort((a, b) => Number(b[1]) - Number(a[1]) || a[0].localeCompare(b[0]));
+
+        if (rows.length === 0) return `${title}\n\n${uiText.emptyStats}`;
+
+        const body = rows.map(([label, count], index) => `${index + 1}. ${label}: ${Number(count)}`).join('\n');
+        return `${title}\n\n${body}`;
+    }
+
+    function showUsageStats(scope) {
+        const message = formatUsageStats(scope);
+        if (typeof global.callPopup === 'function') {
+            global.callPopup(message, 'text');
+            return;
+        }
+        if (typeof global.alert === 'function') {
+            global.alert(message);
+        }
     }
 
     function syncSettingsPanel() {
@@ -355,6 +407,8 @@ function resolveDropdownSorterHostGlobal(runtimeGlobal) {
         const worldMode = panel.querySelector('#stdfs-world-mode');
         const clearPreset = panel.querySelector('#stdfs-clear-preset');
         const clearWorld = panel.querySelector('#stdfs-clear-world');
+        const showPresetStats = panel.querySelector('#stdfs-show-preset-stats');
+        const showWorldStats = panel.querySelector('#stdfs-show-world-stats');
 
         presetMode?.addEventListener('change', () => {
             setScopeMode('preset', presetMode.value);
@@ -366,6 +420,8 @@ function resolveDropdownSorterHostGlobal(runtimeGlobal) {
         });
         clearPreset?.addEventListener('click', () => clearUsage('preset'));
         clearWorld?.addEventListener('click', () => clearUsage('world'));
+        showPresetStats?.addEventListener('click', () => showUsageStats('preset'));
+        showWorldStats?.addEventListener('click', () => showUsageStats('world'));
 
         host.append(panel);
     }
@@ -469,6 +525,7 @@ function resolveDropdownSorterHostGlobal(runtimeGlobal) {
             createSettingsPanelHtml,
             getSelectionLabels,
             createSelect2ChangeGate,
+            formatUsageStats,
         },
     };
 
