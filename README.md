@@ -17,7 +17,7 @@
 
 1. 打开 JS-Slash-Runner / 酒馆助手的脚本库。
 2. 选择导入脚本。
-3. 导入 [酒馆助手脚本-下拉菜单使用频率排序.json](./酒馆助手脚本-下拉菜单使用频率排序.json)。
+3. 导入 [下拉菜单使用频率排序.json](./下拉菜单使用频率排序.json)。
 4. 启用脚本并刷新 SillyTavern 页面。
 
 如果导入 JSON 不可用，也可以新建一个全局脚本，然后将 [st-dropdown-frequency-sorter.user.js](./st-dropdown-frequency-sorter.user.js) 的内容复制进去。
