@@ -1,29 +1,17 @@
-# SillyTavern Dropdown Menu Optimization
+# 预设/世界书下拉菜单按使用频率排序
 
-用于 JS-Slash-Runner / 酒馆助手的 SillyTavern 全局脚本。
+本插件代码全部由GPT-5.5开发、测试与推送。
 
-## 功能
+这是一个用于 JS-Slash-Runner / 酒馆助手的 SillyTavern 全局脚本，用来优化“预设”和“世界书”下拉菜单的排序体验。启用后，你可以让菜单保持原本顺序，也可以让常用项目自动排到前面，减少在大量预设或世界书中反复查找的时间。
 
-- 优化预设下拉菜单：可选择默认顺序或按使用频率从高到低排序。
-- 优化世界书下拉菜单：可选择默认顺序或按使用频率从高到低排序。
-- 自动记录用户选择次数，并保存在浏览器 `localStorage` 中。
-- 世界书菜单兼容 SillyTavern 的 jQuery/select2 事件，激活世界书和点击已激活世界书进入详细编辑都会计入常用统计。
-- 设置入口挂在 SillyTavern 扩展设置容器 `#extensions_settings` 下，使用原生 `inline-drawer` 抽屉样式。
+## 功能简介
 
-## 设置入口
-
-导入并启用脚本后，在扩展设置栏中找到 **下拉菜单排序优化**：
-
-- `预设下拉菜单`：可切换 `默认` / `常用`。
-- `世界书下拉菜单`：可切换 `默认` / `常用`。
-- `清预设`：清空预设下拉菜单的使用频率。
-- `清世界`：清空世界书下拉菜单的使用频率。
-- `看预设`：查看预设点击次数排行。
-- `看世界`：查看世界书点击次数排行。
-
-这四个按钮固定为一行四列，使用短文字而不是抽象符号。
-
-脚本不会再把切换控件插到业务下拉框旁边，避免挤占原有菜单空间。
+- 支持预设下拉菜单按使用频率排序。
+- 支持世界书下拉菜单按使用频率排序。
+- 可分别为预设和世界书选择 `默认` 或 `常用` 排序。
+- 自动记录点击次数，刷新页面后统计仍会保留。
+- 可查看预设和世界书的点击次数排行。
+- 可分别清空预设和世界书的使用频率统计。
 
 ## 导入方式
 
@@ -34,22 +22,22 @@
 
 如果导入 JSON 不可用，也可以新建一个全局脚本，然后将 [st-dropdown-frequency-sorter.user.js](./st-dropdown-frequency-sorter.user.js) 的内容复制进去。
 
-## 控制台 API
+## 使用方式
 
-脚本会暴露 `window.STDropdownFrequencySorter`：
+导入并启用脚本后，在 SillyTavern 的扩展设置栏中找到 **下拉菜单排序优化**。
 
-```js
-STDropdownFrequencySorter.setMode('preset', 'frequency');
-STDropdownFrequencySorter.setMode('world', 'default');
-STDropdownFrequencySorter.clearUsage('preset');
-STDropdownFrequencySorter.clearUsage('world');
-STDropdownFrequencySorter.refresh();
-```
+- `预设下拉菜单`：切换预设菜单的排序方式。
+- `世界书下拉菜单`：切换世界书菜单的排序方式。
+- `默认`：使用 SillyTavern 原本的菜单顺序。
+- `常用`：按点击次数从高到低排序。
 
-## 验证
+## 统计按钮
 
-```bash
-node --check st-dropdown-frequency-sorter.user.js
-node tests/dropdown-frequency-sorter.test.js
-node tests/js-slash-runner-export.test.js
-```
+- `清预设`：清空预设下拉菜单的点击次数统计。
+- `清世界`：清空世界书下拉菜单的点击次数统计。
+- `看预设`：查看预设点击次数排行。
+- `看世界`：查看世界书点击次数排行。
+
+## 说明
+
+使用频率统计保存在当前浏览器中，更换浏览器、清理站点数据或使用不同设备时，统计结果不会自动同步。
