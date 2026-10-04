@@ -9,7 +9,6 @@ function resolveDropdownSorterHostGlobal(runtimeGlobal) {
             return runtimeGlobal.parent;
         }
     } catch {
-        // Cross-origin frames cannot be inspected. Fall back to the current frame.
     }
 
     return runtimeGlobal;
@@ -34,15 +33,16 @@ function resolveDropdownSorterHostGlobal(runtimeGlobal) {
             preset: {},
             world: {},
         },
-        originalOrders: {},
     });
 
     let observer = null;
     let refreshTimer = null;
-    let isApplying = false;
+    let active = false;
     let jqueryEventsBound = false;
-    let lastRecordSignature = '';
-    let lastRecordTime = 0;
+    let boundJQuery = null;
+    const selections = new WeakMap();
+    const originalOrders = new Map();
+    const runtime = typeof window !== 'undefined' ? window : global;
 
     function cloneDefaultState() {
         return JSON.parse(JSON.stringify(defaultState));
@@ -62,14 +62,14 @@ function resolveDropdownSorterHostGlobal(runtimeGlobal) {
 
         try {
             const loaded = JSON.parse(storage.getItem(STORAGE_KEY) || '{}');
-            return {
-                settings: { ...defaultState.settings, ...(loaded.settings || {}) },
-                usage: {
-                    preset: { ...(loaded.usage?.preset || {}) },
-                    world: { ...(loaded.usage?.world || {}) },
-                },
-                originalOrders: { ...(loaded.originalOrders || {}) },
-            };
+            const result = cloneDefaultState();
+            for (const scope of ['preset', 'world']) {
+                const key = `${scope}Mode`;
+                if (MODES.has(loaded?.settings?.[key])) result.settings[key] = loaded.settings[key];
+                result.usage[scope] = Object.fromEntries(Object.entries(loaded?.usage?.[scope] || {})
+                    .filter(([, count]) => Number.isSafeInteger(count) && count >= 0));
+            }
+            return result;
         } catch {
             return cloneDefaultState();
         }
@@ -80,7 +80,11 @@ function resolveDropdownSorterHostGlobal(runtimeGlobal) {
     function saveState() {
         const storage = getStorage();
         if (!storage) return;
-        storage.setItem(STORAGE_KEY, JSON.stringify(state));
+        try {
+            storage.setItem(STORAGE_KEY, JSON.stringify(state));
+        } catch (error) {
+            global.console.warn('Dropdown sorter: statistics could not be saved.', error);
+        }
     }
 
     function getDocument() {
@@ -104,53 +108,22 @@ function resolveDropdownSorterHostGlobal(runtimeGlobal) {
         return String(optionLike.text || optionLike.textContent || optionLike.value || '').trim();
     }
 
-    function getOptionKey(optionLike) {
-        return `${String(optionLike.value || '')}\u0000${getLabel(optionLike)}`;
-    }
-
     function getUsageKey(optionLike) {
         return getLabel(optionLike);
     }
-
-    function getSelectionLabels(select, event) {
-        const select2Data = event?.params?.data;
-        const select2Text = getLabel(select2Data || {});
-        if (select2Text) return [select2Text];
-
-        return Array.from(select?.selectedOptions || [])
-            .map(option => getLabel(option))
-            .filter(Boolean);
-    }
-
-    function createSelect2ChangeGate() {
-        const select2Times = new WeakMap();
-        return {
-            shouldSkip(select, eventType, now = Date.now()) {
-                if (!select || !eventType) return false;
-                if (String(eventType).startsWith('select2:')) {
-                    select2Times.set(select, now);
-                    return false;
-                }
-                if (eventType === 'change') {
-                    const lastSelect2Time = select2Times.get(select) || 0;
-                    return now - lastSelect2Time < 250;
-                }
-                return false;
-            },
-        };
-    }
-
-    const select2ChangeGate = createSelect2ChangeGate();
 
     function createUsageStore(initialUsage = state.usage) {
         const usage = initialUsage;
         return {
             get(scope, key) {
-                return Number(usage[scope]?.[key] || 0);
+                return Object.hasOwn(usage[scope] || {}, key) ? usage[scope][key] : 0;
             },
             record(scope, key) {
                 if (!usage[scope]) usage[scope] = {};
-                usage[scope][key] = Number(usage[scope][key] || 0) + 1;
+                Object.defineProperty(usage[scope], key, {
+                    value: Math.min(this.get(scope, key) + 1, Number.MAX_SAFE_INTEGER),
+                    writable: true, enumerable: true, configurable: true,
+                });
                 return usage[scope][key];
             },
             clear(scope) {
@@ -169,7 +142,8 @@ function resolveDropdownSorterHostGlobal(runtimeGlobal) {
         const copy = Array.from(options);
         return copy.sort((a, b) => {
             if (mode === 'frequency') {
-                const countDiff = Number(usageCounts[getUsageKey(b)] || 0) - Number(usageCounts[getUsageKey(a)] || 0);
+                const countDiff = (Object.hasOwn(usageCounts, getUsageKey(b)) ? usageCounts[getUsageKey(b)] : 0)
+                    - (Object.hasOwn(usageCounts, getUsageKey(a)) ? usageCounts[getUsageKey(a)] : 0);
                 if (countDiff !== 0) return countDiff;
             }
             return Number(a.originalIndex || 0) - Number(b.originalIndex || 0);
@@ -183,73 +157,51 @@ function resolveDropdownSorterHostGlobal(runtimeGlobal) {
         return null;
     }
 
-    function getMenuKey(select, scope) {
-        const id = select.id || select.getAttribute('name') || select.getAttribute('data-preset-manager-for') || 'anonymous';
-        return `${scope}:${id}`;
-    }
-
-    function ensureOriginalOrders(select, scope) {
-        const menuKey = getMenuKey(select, scope);
-        if (!state.originalOrders[menuKey]) state.originalOrders[menuKey] = {};
-        const orders = state.originalOrders[menuKey];
-        Array.from(select.options).forEach((option, index) => {
-            const key = getOptionKey(option);
-            if (!Object.hasOwn(orders, key)) orders[key] = index;
-        });
-        return orders;
-    }
-
-    function getOptionRecords(select, scope) {
-        const orders = ensureOriginalOrders(select, scope);
-        return Array.from(select.options).map((option, index) => {
-            const key = getOptionKey(option);
-            return {
-                option,
-                value: option.value,
-                text: getLabel(option),
-                originalIndex: Number(orders[key] ?? index),
-                selected: option.selected,
-            };
-        });
-    }
-
-    function applySortToSelect(select) {
+    function applySortToSelect(select, mode = getScopeMode(getSelectScope(select))) {
         const scope = getSelectScope(select);
         if (!scope) return;
-
-        const records = getOptionRecords(select, scope);
-        const selectedKeys = new Set(records.filter(record => record.selected).map(record => getOptionKey(record.option)));
-        const sorted = sortOptions(records, state.usage[scope] || {}, getScopeMode(scope));
-        const alreadySorted = sorted.every((record, index) => select.options[index] === record.option);
-
-        if (!alreadySorted) {
-            for (const record of sorted) {
-                select.appendChild(record.option);
+        const selected = new Set(select.selectedOptions);
+        const parents = [select, ...select.querySelectorAll('optgroup')];
+        for (const parent of parents) {
+            const children = Array.from(parent.children);
+            let entry = originalOrders.get(parent);
+            if (!entry) entry = { baseline: children, rendered: children };
+            const retained = children.filter(node => entry.rendered.includes(node));
+            const previous = entry.rendered.filter(node => children.includes(node));
+            if (retained.some((node, i) => node !== previous[i])) {
+                entry.baseline = children;
+            } else {
+                entry.baseline = entry.baseline.filter(node => children.includes(node));
+                children.forEach((node, i) => {
+                    if (entry.baseline.includes(node)) return;
+                    const next = children.slice(i + 1).find(item => entry.baseline.includes(item));
+                    entry.baseline.splice(next ? entry.baseline.indexOf(next) : entry.baseline.length, 0, node);
+                });
             }
+            const movable = node => node.tagName === 'OPTION' && node.value !== '' && !node.disabled;
+            const records = entry.baseline.filter(movable).map((option, originalIndex) => ({
+                option, text: getLabel(option), originalIndex,
+            }));
+            const sorted = sortOptions(records, state.usage[scope], mode);
+            let index = 0;
+            const ordered = entry.baseline.map(node => movable(node) ? sorted[index++].option : node);
+            if (ordered.some((node, i) => children[i] !== node)) parent.append(...ordered);
+            entry.rendered = ordered;
+            originalOrders.set(parent, entry);
         }
-
-        for (const record of records) {
-            record.option.selected = selectedKeys.has(getOptionKey(record.option));
-        }
+        for (const option of select.options) option.selected = selected.has(option);
+        if (!selected.size) select.selectedIndex = -1;
     }
 
-    function recordSelection(select, event) {
+    function recordSelection(select) {
         const scope = getSelectScope(select);
-        if (!scope) return;
-
-        const selectedLabels = getSelectionLabels(select, event);
-        if (selectedLabels.length === 0) return;
-
-        const signature = `${scope}:${selectedLabels.join('\u0001')}`;
-        const now = Date.now();
-        if (signature === lastRecordSignature && now - lastRecordTime < 250) return;
-        lastRecordSignature = signature;
-        lastRecordTime = now;
-
-        for (const label of selectedLabels) {
-            usageStore.record(scope, label);
-        }
-
+        if (!active || !scope) return;
+        const current = new Set(Array.from(select.selectedOptions).filter(o => o.value !== '' && !o.disabled).map(o => o.value));
+        const previous = selections.get(select) || new Set();
+        selections.set(select, current);
+        const added = Array.from(select.selectedOptions).filter(o => current.has(o.value) && !previous.has(o.value));
+        if (!added.length) return;
+        for (const option of added) usageStore.record(scope, getLabel(option));
         saveState();
         refresh();
     }
@@ -371,7 +323,10 @@ function resolveDropdownSorterHostGlobal(runtimeGlobal) {
     function showUsageStats(scope) {
         const message = formatUsageStats(scope);
         if (typeof global.callPopup === 'function') {
-            global.callPopup(message, 'text');
+            const content = getDocument().createElement('pre');
+            content.textContent = message;
+            content.style.cssText = 'white-space:pre-wrap;overflow-wrap:anywhere;max-height:60vh;overflow:auto;text-align:left';
+            global.callPopup(content.outerHTML, 'text');
             return;
         }
         if (typeof global.alert === 'function') {
@@ -438,9 +393,10 @@ function resolveDropdownSorterHostGlobal(runtimeGlobal) {
     }
 
     function refresh() {
-        if (refreshTimer) global.clearTimeout(refreshTimer);
+        if (!active || refreshTimer !== null) return;
         refreshTimer = global.setTimeout(() => {
-            isApplying = true;
+            refreshTimer = null;
+            if (!active) return;
             try {
                 bindJQueryEvents();
                 injectStyle();
@@ -448,28 +404,28 @@ function resolveDropdownSorterHostGlobal(runtimeGlobal) {
                 for (const select of findManagedSelects()) {
                     const scope = getSelectScope(select);
                     if (!scope) continue;
+                    if (!selections.has(select)) {
+                        selections.set(select, new Set(Array.from(select.selectedOptions).map(o => o.value)));
+                    }
                     select.setAttribute(MANAGED_ATTR, 'true');
                     applySortToSelect(select);
                 }
                 syncSettingsPanel();
+                for (const parent of originalOrders.keys()) {
+                    if (!parent.isConnected) originalOrders.delete(parent);
+                }
             } finally {
-                isApplying = false;
+                observer?.takeRecords();
             }
         }, 50);
     }
 
-    function bindEvents() {
-        const document = getDocument();
-        if (!document || document[`${MODULE_NAME}Bound`]) return;
-        document[`${MODULE_NAME}Bound`] = true;
+    function onNativeChange(event) {
+        if (!jqueryEventsBound) recordSelection(event.target);
+    }
 
-        document.addEventListener('change', event => {
-            if (jqueryEventsBound) return;
-            const target = event.target;
-            if (target?.tagName === 'SELECT' && getSelectScope(target)) {
-                recordSelection(target, event);
-            }
-        }, true);
+    function onJQueryChange(event) {
+        if (!event.namespace) recordSelection(this);
     }
 
     function bindJQueryEvents() {
@@ -477,13 +433,11 @@ function resolveDropdownSorterHostGlobal(runtimeGlobal) {
         if (jqueryEventsBound || typeof $ !== 'function') return;
 
         jqueryEventsBound = true;
+        boundJQuery = $;
         $(getDocument()).on(
-            'change.stdfs select2:select.stdfs',
+            'change.stdfs',
             'select[data-preset-manager-for], #world_info, #world_editor_select',
-            function onDropdownChanged(event) {
-                if (select2ChangeGate.shouldSkip(this, event.type)) return;
-                recordSelection(this, event);
-            },
+            onJQueryChange,
         );
     }
 
@@ -491,8 +445,10 @@ function resolveDropdownSorterHostGlobal(runtimeGlobal) {
         const document = getDocument();
         if (!document || observer || typeof global.MutationObserver !== 'function') return;
 
-        observer = new global.MutationObserver(() => {
-            if (!isApplying) refresh();
+        observer = new global.MutationObserver(records => {
+            const selector = 'select[data-preset-manager-for], #world_info, #world_editor_select, #extensions_settings';
+            if (records.some(record => record.target.closest?.('select') && getSelectScope(record.target.closest('select'))
+                || [...record.addedNodes, ...record.removedNodes].some(node => node.matches?.(selector) || node.querySelector?.(selector)))) refresh();
         });
         observer.observe(document.body || document.documentElement, {
             childList: true,
@@ -501,18 +457,36 @@ function resolveDropdownSorterHostGlobal(runtimeGlobal) {
     }
 
     function start() {
+        if (active || !getDocument()) return;
+        active = true;
+        for (const select of findManagedSelects()) {
+            selections.set(select, new Set(Array.from(select.selectedOptions).map(o => o.value)));
+        }
         bindJQueryEvents();
-        bindEvents();
+        getDocument().addEventListener('change', onNativeChange, true);
+        runtime.addEventListener?.('pagehide', stop);
         refresh();
         startObserver();
     }
 
     function stop() {
+        active = false;
+        global.clearTimeout(refreshTimer);
+        refreshTimer = null;
         if (observer) observer.disconnect();
         observer = null;
         const document = getDocument();
         if (!document) return;
+        document.removeEventListener('DOMContentLoaded', start);
+        document.removeEventListener('change', onNativeChange, true);
+        boundJQuery?.(document).off('change.stdfs', onJQueryChange);
+        boundJQuery = null;
+        jqueryEventsBound = false;
+        runtime.removeEventListener?.('pagehide', stop);
+        for (const select of findManagedSelects()) applySortToSelect(select, 'default');
+        originalOrders.clear();
         document.getElementById(SETTINGS_PANEL_ID)?.remove();
+        document.getElementById(STYLE_ID)?.remove();
         document.querySelectorAll(`[${MANAGED_ATTR}]`).forEach(element => element.removeAttribute(MANAGED_ATTR));
     }
 
@@ -528,12 +502,11 @@ function resolveDropdownSorterHostGlobal(runtimeGlobal) {
             createUsageStore: () => createUsageStore({ preset: {}, world: {} }),
             resolveHostGlobal: resolveDropdownSorterHostGlobal,
             createSettingsPanelHtml,
-            getSelectionLabels,
-            createSelect2ChangeGate,
             formatUsageStats,
         },
     };
 
+    global[MODULE_NAME]?.stop();
     global[MODULE_NAME] = api;
 
     if (typeof module !== 'undefined' && module.exports) {

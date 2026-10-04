@@ -1,0 +1,12 @@
+{
+  "name": "sillytavern-dropdown-sorter",
+  "private": true,
+  "scripts": {
+    "build": "node scripts/build.cjs"
+  },
+  "devDependencies": {
+    "jsdom": "26.1.0",
+    "jquery": "3.7.1",
+    "select2": "4.0.13"
+  }
+}
